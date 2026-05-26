@@ -1,0 +1,22 @@
+{
+  "name": "wattx-stratum",
+  "version": "1.0.0",
+  "description": "WATTx multi-algorithm merged mining stratum server",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "bn.js": "^5.2.1",
+    "express": "^4.18.2",
+    "winston": "^3.11.0"
+  },
+  "optionalDependencies": {
+    "node-multi-hashing": "^1.0.2",
+    "equihashverify": "^0.3.0",
+    "node-randomx": "^0.1.0",
+    "@ethereumjs/ethash": "^3.0.1",
+    "@ethereumjs/block": "^5.0.1"
+  }
+}
