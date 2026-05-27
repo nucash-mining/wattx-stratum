@@ -2,9 +2,9 @@ module.exports = {
   // WATTx daemon — the aux chain that receives AuxPoW proofs
   wattx: {
     host: '127.0.0.1',
-    port: 3890,
-    user: 'rpcuser',
-    password: 'rpcpassword',
+    port: 3889,
+    user: 'wattxrpc',
+    password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV',
     address: 'WATTX_REWARD_ADDRESS',
     auxpowChainId: 1,
   },
@@ -36,7 +36,7 @@ module.exports = {
       algorithm: 'ethash',
       stratumPort: 3333,
       chainId: 2330,
-      daemon: { host: '127.0.0.1', port: 8545, user: '', password: '' },
+      daemon: { host: '127.0.0.1', port: 8332, user: '', password: '' },
       address: 'ALT_REWARD_ADDRESS',
       enabled: true,
     },
