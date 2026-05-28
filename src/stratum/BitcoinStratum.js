@@ -5,6 +5,8 @@ const DaemonRPC = require('../rpc/DaemonRPC');
 const AuxPoW = require('../auxpow/AuxPoW');
 const CoinbaseBuilder = require('../coinbase/CoinbaseBuilder');
 const VarDiff = require('./VarDiff');
+const algorithms = require('../algorithms');
+const { diffToTarget, bitsToTarget } = require('../utils/mining');
 const logger = require('../logger');
 
 const EXTRANONCE2_SIZE = 4;
@@ -215,29 +217,45 @@ class BitcoinStratumServer extends EventEmitter {
     const job = this.jobs.get(jobId);
     if (!job) return this._send(client, id, false, [21, 'Job not found']);
 
-    // ---- Reconstruct the full coinbase tx ----
+    // ---- Reconstruct coinbase + header ----
     const coinbaseTx   = CoinbaseBuilder.assembleCoinbase(job.coinb1, client.extranonce1, extranonce2, job.coinb2);
     const coinbaseTxId = CoinbaseBuilder.txId(coinbaseTx);
     const merkleRoot   = CoinbaseBuilder.merkleRoot(coinbaseTxId, job.merkleBranch);
-
-    // ---- Build 80-byte block header ----
     const header = CoinbaseBuilder.buildHeader({
-      version:    job.version,
-      prevHashHex: job.template.previousblockhash,  // display order — reversed inside buildHeader
+      version:     job.version,
+      prevHashHex: job.template.previousblockhash,
       merkleRoot,
-      ntimeHex:   ntime,
-      bitsHex:    job.bits,
-      nonceHex:   nonce,
+      ntimeHex:    ntime,
+      bitsHex:     job.bits,
+      nonceHex:    nonce,
     });
 
-    // ---- Build full serialised block ----
-    const blockHex = CoinbaseBuilder.buildBlock({ header, coinbaseTx, template: job.template });
+    // ---- Share validation ----
+    const algo = algorithms[this.algorithm];
+    const poolTarget    = diffToTarget(client.difficulty);
+    const networkTarget = bitsToTarget(job.bits);
+    let shareHash;
+    try {
+      shareHash = algo.hash(header);
+    } catch (e) {
+      // Native module not installed — accept unvalidated, daemon will reject invalid blocks
+      logger.warn(`${this.algorithm} validation skipped (${e.message}) — accepting unvalidated`, { coin: this.coin.ticker });
+    }
 
-    const tickers = this.coins.map((c) => c.ticker).join('+');
+    if (shareHash) {
+      if (!algo.verify(header, poolTarget)) {
+        return this._send(client, id, false, [23, 'Low difficulty share']);
+      }
+    }
+
+    const tickers    = this.coins.map((c) => c.ticker).join('+');
+    const isBlock    = shareHash ? algo.verify(header, networkTarget) : false;
+    const blockHex   = CoinbaseBuilder.buildBlock({ header, coinbaseTx, template: job.template });
+
     this._send(client, id, true);
     client.shares++;
-    logger.info(`Share from ${client.worker} job=${jobId} height=${job.height}`, { coin: tickers });
-    this.emit('share', { client, job, extranonce2, ntime, nonce, header, coinbaseTx });
+    logger.info(`Share from ${client.worker} job=${jobId} height=${job.height}${isBlock ? ' BLOCK!' : ''}`, { coin: tickers });
+    this.emit('share', { client, job, extranonce2, ntime, nonce, header, coinbaseTx, isBlock });
 
     // VarDiff retarget
     const newDiff = this.varDiff.onShare(client);
@@ -249,22 +267,23 @@ class BitcoinStratumServer extends EventEmitter {
       logger.debug(`VarDiff ${client.worker}: diff → ${newDiff}`, { coin: tickers });
     }
 
-    // ---- Submit block to the primary coin daemon ----
-    this.rpcs[this.coin.ticker].submitBlock(blockHex).catch((e) => {
-      logger.error(`submitBlock failed for ${this.coin.ticker}: ${e.message}`, { coin: this.coin.ticker });
-    });
+    // Only submit the block if the share meets network difficulty
+    if (isBlock) {
+      this.rpcs[this.coin.ticker].submitBlock(blockHex).catch((e) => {
+        logger.error(`submitBlock failed for ${this.coin.ticker}: ${e.message}`, { coin: this.coin.ticker });
+      });
 
-    // ---- Submit AuxPoW to WATTx using the aux block committed in this job's coinbase ----
-    if (job.auxBlock) {
-      const coinbaseBranch = job.merkleBranch.map((h) => Buffer.from(h, 'hex'));
-      AuxPoW.trySubmit({
-        wattxRPC:          this.wattxRPC,
-        parentBlockHeader: header,
-        coinbaseTx,
-        coinbaseBranch,
-        auxBlock:          job.auxBlock,
-        logger,
-      }).catch(() => {});
+      if (job.auxBlock) {
+        const coinbaseBranch = job.merkleBranch.map((h) => Buffer.from(h, 'hex'));
+        AuxPoW.trySubmit({
+          wattxRPC:          this.wattxRPC,
+          parentBlockHeader: header,
+          coinbaseTx,
+          coinbaseBranch,
+          auxBlock:          job.auxBlock,
+          logger,
+        }).catch(() => {});
+      }
     }
   }
 }

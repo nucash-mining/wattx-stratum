@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const EventEmitter = require('events');
 const AuxPoW = require('../auxpow/AuxPoW');
 const VarDiff = require('./VarDiff');
+const randomxAlgo = require('../algorithms/randomx');
+const { diffToTarget } = require('../utils/mining');
 const logger = require('../logger');
 
 const TICKER = 'XMR';
@@ -201,6 +203,22 @@ class MoneroStratumServer extends EventEmitter {
     }
     if (client.nonces.has(nonce)) {
       return this._send(client, id, null, { code: -2, message: 'Duplicate share' });
+    }
+
+    // ---- Share validation ----
+    // Reconstruct the blob with the miner's nonce (nonce is 8 hex chars = 4 bytes at offset 39)
+    const blobBytes = Buffer.from(this.currentJob.blob, 'hex');
+    const nonceBuf  = Buffer.from(nonce, 'hex'); // 4-byte nonce from miner
+    nonceBuf.copy(blobBytes, 39, 0, 4);
+    const seedHash   = Buffer.from(this.currentJob.seedHash, 'hex');
+    const poolTarget = diffToTarget(client.difficulty);
+
+    try {
+      if (!randomxAlgo.verify(blobBytes, seedHash, poolTarget)) {
+        return this._send(client, id, null, { code: -5, message: 'Low difficulty share' });
+      }
+    } catch (e) {
+      logger.warn(`RandomX validation skipped (${e.message})`, { coin: TICKER });
     }
 
     client.nonces.add(nonce);

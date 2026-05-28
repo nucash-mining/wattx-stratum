@@ -1,17 +1,16 @@
-const BN = require('bn.js');
+'use strict';
+const { hashMeetsTarget } = require('../utils/mining');
 
-// Requires node-multi-hashing native addon (npm install node-multi-hashing)
 let multiHashing;
 try { multiHashing = require('node-multi-hashing'); } catch (_) {}
 
 function hash(header) {
-  if (!multiHashing) throw new Error('node-multi-hashing not installed — run: npm install node-multi-hashing');
+  if (!multiHashing) throw new Error('node-multi-hashing not installed');
   return multiHashing.scrypt(header);
 }
 
 function verify(header, target) {
-  const h = hash(header);
-  return new BN(h.reverse()).lte(new BN(target.reverse()));
+  return hashMeetsTarget(hash(header), target, true);
 }
 
-module.exports = { name: 'scrypt', verify, hash, nativeRequired: true };
+module.exports = { name: 'scrypt', hash, verify, nativeRequired: true };

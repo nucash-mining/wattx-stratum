@@ -1,22 +1,29 @@
-const BN = require('bn.js');
+'use strict';
+const crypto = require('crypto');
+const { hashMeetsTarget } = require('../utils/mining');
 
-// Equihash 200,9 — used by ZEN, ZEC, BTCZ
-// Requires equihashverify native addon (npm install equihashverify)
+// Equihash 200,9 — ZEN, ZEC, BTCZ
 let equihashverify;
 try { equihashverify = require('equihashverify'); } catch (_) {}
 
-// header: Buffer — 140-byte Zcash block header (without solution)
-// solution: Buffer — Equihash solution (1344 bytes for 200,9)
+/**
+ * Verify an Equihash share.
+ * header  : Buffer — 140-byte Zcash block header (version+prevhash+merkle+reserved+time+bits+nNonce)
+ * solution: Buffer — 1344-byte Equihash 200,9 solution
+ * target  : Buffer — 32-byte big-endian pool/network target
+ */
 function verify(header, solution, target) {
-  if (!equihashverify) throw new Error('equihashverify not installed — run: npm install equihashverify');
-  const valid = equihashverify.verify(header, solution, 200, 9);
-  if (!valid) return false;
-  // Check difficulty against target
-  const headerWithSolution = Buffer.concat([header, solution]);
-  const crypto = require('crypto');
-  const h1 = crypto.createHash('sha256').update(headerWithSolution).digest();
-  const h2 = crypto.createHash('sha256').update(h1).digest();
-  return new BN(h2.reverse()).lte(new BN(target.reverse()));
+  if (!equihashverify) throw new Error('equihashverify not installed');
+  if (!equihashverify.verify(header, solution, 200, 9)) return false;
+  // Difficulty check: SHA256d of the full header (includes nNonce, not solution)
+  const h = dsha256(header);
+  return hashMeetsTarget(h, target, true);
+}
+
+function dsha256(buf) {
+  return crypto.createHash('sha256')
+    .update(crypto.createHash('sha256').update(buf).digest())
+    .digest();
 }
 
 module.exports = { name: 'equihash_200_9', verify, nativeRequired: true, n: 200, k: 9 };

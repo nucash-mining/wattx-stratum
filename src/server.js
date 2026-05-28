@@ -4,6 +4,8 @@ const WattxRPC = require('./auxpow/WattxRPC');
 const BitcoinStratumServer = require('./stratum/BitcoinStratum');
 const MoneroStratumServer = require('./stratum/MoneroStratum');
 const EthashStratumServer = require('./stratum/EthashStratum');
+const EquihashStratumServer = require('./stratum/EquihashStratum');
+const KaspaStratumServer = require('./stratum/KaspaStratum');
 const StatsAPI = require('./api/StatsAPI');
 const fs = require('fs');
 
@@ -72,6 +74,10 @@ for (const [port, coins] of Object.entries(byPort)) {
     server = new MoneroStratumServer(coins[0], wattxRPC);
   } else if (algorithm === 'ethash') {
     server = new EthashStratumServer(coins, wattxRPC);
+  } else if (algorithm === 'equihash_200_9') {
+    server = new EquihashStratumServer(coins, wattxRPC);
+  } else if (algorithm === 'kheavyhash') {
+    server = new KaspaStratumServer(coins[0], wattxRPC);
   } else {
     server = new BitcoinStratumServer(coins, wattxRPC);
   }
