@@ -10,6 +10,13 @@ trap 'rm -rf "$TMP"' EXIT
 cd "$POOL_DIR"
 mkdir -p native
 
+echo "=== Installing system dependencies ==="
+if command -v dnf &>/dev/null; then
+  sudo dnf install -y libsodium-devel
+elif command -v apt-get &>/dev/null; then
+  sudo apt-get install -y libsodium-dev
+fi
+
 echo "=== Installing packages (no build) ==="
 npm install github:s-nomp/equihashverify github:zone117x/node-multi-hashing github:prudanoff/node-randomx --no-save --ignore-scripts
 
