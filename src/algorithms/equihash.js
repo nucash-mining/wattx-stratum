@@ -3,8 +3,11 @@ const crypto = require('crypto');
 const { hashMeetsTarget } = require('../utils/mining');
 
 // Equihash 200,9 — ZEN, ZEC, BTCZ
+const path = require('path');
 let equihashverify;
-try { equihashverify = require('equihashverify'); } catch (_) {}
+try { equihashverify = require(path.join(__dirname, '../../native/equihashverify.node')); } catch (_) {
+  try { equihashverify = require('equihashverify'); } catch (_) {}
+}
 
 /**
  * Verify an Equihash share.
@@ -14,7 +17,7 @@ try { equihashverify = require('equihashverify'); } catch (_) {}
  */
 function verify(header, solution, target) {
   if (!equihashverify) throw new Error('equihashverify not installed');
-  if (!equihashverify.verify(header, solution, 200, 9)) return false;
+  if (!equihashverify.verify(header, solution, 'ZcashPoW', 200, 9)) return false;
   // Difficulty check: SHA256d of the full header (includes nNonce, not solution)
   const h = dsha256(header);
   return hashMeetsTarget(h, target, true);

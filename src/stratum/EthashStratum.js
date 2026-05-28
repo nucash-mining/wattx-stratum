@@ -184,9 +184,11 @@ class EthashStratumServer extends EventEmitter {
     }
 
     const tickers = matchingCoins.map((c) => c.ticker).join('+');
+    const primaryJob = this.jobs[matchingCoins[0].ticker];
+    const height = primaryJob?.blockNumber || 0;
     this._send(client, id, true);
     logger.info(`Ethash share from ${client.worker} nonce=${nonce}`, { coin: tickers });
-    this.emit('share', { client, nonce, headerHash, mixDigest, coins: matchingCoins });
+    this.emit('share', { client, nonce, headerHash, mixDigest, coins: matchingCoins, height, isBlock: false });
 
     // VarDiff retarget
     const newDiff = this.varDiff.onShare(client);
@@ -198,9 +200,16 @@ class EthashStratumServer extends EventEmitter {
       logger.debug(`VarDiff ${client.worker}: diff → ${newDiff}`, { coin: tickers });
     }
 
-    // Submit to each matching coin's daemon simultaneously
+    // Submit to each coin's daemon; emit 'block' if daemon accepts as a full block
     for (const c of matchingCoins) {
-      this.rpcs[c.ticker].call('eth_submitWork', [nonce, headerHash, mixDigest]).catch((e) => {
+      const job = this.jobs[c.ticker];
+      this.rpcs[c.ticker].call('eth_submitWork', [nonce, headerHash, mixDigest]).then((accepted) => {
+        if (accepted) {
+          const blkHeight = job?.blockNumber || 0;
+          logger.info(`ETH BLOCK FOUND for ${c.ticker} at height=${blkHeight}`, { coin: c.ticker });
+          this.emit('block', { client, coin: c, height: blkHeight, hash: headerHash });
+        }
+      }).catch((e) => {
         logger.error(`eth_submitWork failed for ${c.ticker}: ${e.message}`, { coin: c.ticker });
       });
     }

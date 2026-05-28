@@ -5,13 +5,16 @@ module.exports = {
     port: 2337,          // RPC port — matches WATTx chain ID (UTXO + EVM)
     user: 'wattxrpc',
     password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV',
-    address: 'WATTX_REWARD_ADDRESS',
+    address: 'WPTAXDteyU2U1u1LRLXzXiVUjxryeZkAEP',
     auxpowChainId: 1,
     chainId: 2337,       // WATTx EVM chain ID
   },
 
   // Stats HTTP API port
   statsPort: 8080,
+
+  // Pool backend URL — shares and block finds are reported here
+  poolBackend: 'http://127.0.0.1:3001',
 
   // Port map — matches stratum.wattxchange.app exactly.
   // Coins sharing a port are mined SIMULTANEOUSLY: one connection earns all coins on that port + WTX.
@@ -30,7 +33,7 @@ module.exports = {
       algorithm: 'randomx',
       stratumPort: 3334,
       daemon: { host: '127.0.0.1', port: 18081, user: '', password: '' },
-      address: 'XMR_REWARD_ADDRESS',
+      address: '4AsjKppNcHfJPekAPKVMsecyVT1v35MVn4N6dsXYSVTZHWsmC66u3sDT5NYavm5udMXHf32Ntb4N2bJqhnN4Gfq2GKZYmMK',
       enabled: true,
     },
     ALT: {
@@ -39,7 +42,7 @@ module.exports = {
       stratumPort: 3333,
       chainId: 2330,
       daemon: { host: '127.0.0.1', port: 8332, user: '', password: '' },
-      address: 'ALT_REWARD_ADDRESS',
+      address: '0xC9537513C9b2EA9551Dee3c611F1b9238820621b',
       enabled: true,
     },
     OCTA: {
@@ -48,7 +51,7 @@ module.exports = {
       stratumPort: 3333,
       chainId: 800001,
       daemon: { host: '127.0.0.1', port: 8546, user: '', password: '' },
-      address: 'OCTA_REWARD_ADDRESS',
+      address: '0xC9537513C9b2EA9551Dee3c611F1b9238820621b',
       enabled: false,
     },
     LTC: {

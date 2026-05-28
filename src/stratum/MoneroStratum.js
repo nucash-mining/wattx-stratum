@@ -5,8 +5,16 @@ const EventEmitter = require('events');
 const AuxPoW = require('../auxpow/AuxPoW');
 const VarDiff = require('./VarDiff');
 const randomxAlgo = require('../algorithms/randomx');
-const { diffToTarget } = require('../utils/mining');
+const { diffToTarget, hashMeetsTarget } = require('../utils/mining');
 const logger = require('../logger');
+
+// Monero difficulty: last 8 bytes of hash as uint64-LE must be < ceil(2^64 / difficulty)
+function _xmrMeetsNetworkDiff(hashBuf, difficulty) {
+  const last8 = hashBuf.slice(24, 32);
+  let val = 0n;
+  for (let i = 7; i >= 0; i--) val = (val << 8n) | BigInt(last8[i]);
+  return val < 0xFFFFFFFFFFFFFFFFn / BigInt(difficulty) + 1n;
+}
 
 const TICKER = 'XMR';
 const ALGO_DEFS = VarDiff.defaultsFor('randomx');
@@ -213,18 +221,30 @@ class MoneroStratumServer extends EventEmitter {
     const seedHash   = Buffer.from(this.currentJob.seedHash, 'hex');
     const poolTarget = diffToTarget(client.difficulty);
 
+    let hashBuf = null;
     try {
-      if (!randomxAlgo.verify(blobBytes, seedHash, poolTarget)) {
+      hashBuf = randomxAlgo.hash(blobBytes, seedHash);
+      if (!hashMeetsTarget(hashBuf, poolTarget, true)) {
         return this._send(client, id, null, { code: -5, message: 'Low difficulty share' });
       }
     } catch (e) {
       logger.warn(`RandomX validation skipped (${e.message})`, { coin: TICKER });
     }
 
+    const isBlock = hashBuf !== null && _xmrMeetsNetworkDiff(hashBuf, this.currentJob.networkDiff);
+
     client.nonces.add(nonce);
     this._send(client, id, { status: 'OK' });
-    logger.info(`XMR share from ${client.worker} nonce=${nonce}`, { coin: TICKER });
-    this.emit('share', { client, job: this.currentJob, nonce, hashResult });
+    logger.info(`XMR share from ${client.worker} nonce=${nonce}${isBlock ? ' BLOCK!' : ''}`, { coin: TICKER });
+    this.emit('share', { client, job: this.currentJob, nonce, hashResult, isBlock });
+
+    if (isBlock) {
+      this._daemonCall('submit_block', [blobBytes.toString('hex')]).then(() => {
+        logger.info(`XMR BLOCK SUBMITTED height=${this.currentJob?.height}`, { coin: TICKER });
+      }).catch((e) => {
+        logger.error(`XMR block submit failed: ${e.message}`, { coin: TICKER });
+      });
+    }
 
     // VarDiff retarget
     const newDiff = this.varDiff.onShare(client);

@@ -1,8 +1,11 @@
 'use strict';
 const { hashMeetsTarget } = require('../utils/mining');
 
+const path = require('path');
 let randomx;
-try { randomx = require('node-randomx'); } catch (_) {}
+try { randomx = require(path.join(__dirname, '../../native/randomx-adapter')); } catch (_) {
+  try { randomx = require('node-randomx'); } catch (_) {}
+}
 
 // Singleton cache + VM — creating a new VM per share would block the event loop.
 // Cache is keyed by seedHash hex; regenerated when the seed changes (~every 2048 XMR blocks).
@@ -27,7 +30,7 @@ function _ensureVM(seedHashBuf) {
  * seedHash : Buffer — 32-byte RandomX seed hash from the block template
  */
 function hash(blob, seedHash) {
-  if (!randomx) throw new Error('node-randomx not installed');
+  if (!randomx) throw new Error('node-randomx native addon not installed');
   const vm = _ensureVM(seedHash);
   return vm.calculateHash(blob);
 }

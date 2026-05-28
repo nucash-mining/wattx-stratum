@@ -93,6 +93,7 @@ class EquihashStratumServer extends EventEmitter {
       merkleBranch,
       merkleRoot,  // 32-byte internal-order Buffer
       hashReserved,
+      height:   template.height,
       version:  template.version  || 4,
       bits:     template.bits,
       curtime:  template.curtime,

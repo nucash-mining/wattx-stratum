@@ -16,10 +16,11 @@
     "winston": "^3.11.0"
   },
   "optionalDependencies": {
-    "node-multi-hashing": "^1.0.2",
-    "equihashverify": "^0.3.0",
-    "node-randomx": "^0.1.0",
+    "@ethereumjs/block": "^5.0.1",
     "@ethereumjs/ethash": "^3.0.1",
-    "@ethereumjs/block": "^5.0.1"
+    "equihashverify": "npm:null@^0.3.0",
+    "node-multi-hashing": "npm:null@^1.0.2",
+    "node-randomx": "npm:null@^0.1.0",
+    "randomx.js": "^0.1.3"
   }
 }
