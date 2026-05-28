@@ -7,6 +7,7 @@ module.exports = {
     password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV',
     address: 'WATTX_REWARD_ADDRESS',
     auxpowChainId: 1,
+    chainId: 2337,       // WATTx EVM chain ID
   },
 
   // Stats HTTP API port

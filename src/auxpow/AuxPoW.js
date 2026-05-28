@@ -64,26 +64,27 @@ class AuxPoW {
   }
 
   // Called after a valid share is found on the parent chain.
-  // Fetches the current WATTx aux block, checks difficulty, and submits if met.
-  static async trySubmit({ wattxRPC, parentBlockHeader, coinbaseTx, coinbaseBranch, logger }) {
+  // auxBlock: the block fetched at job-build time (already committed in the coinbase).
+  //           If omitted, falls back to fetching the current block — but this may not match
+  //           the hash we embedded, so always prefer passing the saved auxBlock.
+  static async trySubmit({ wattxRPC, parentBlockHeader, coinbaseTx, coinbaseBranch, auxBlock, logger }) {
     try {
-      const auxBlock = await wattxRPC.getAuxBlock();
-      const auxHash = Buffer.from(auxBlock.hash, 'hex');
+      const ab = auxBlock || await wattxRPC.getAuxBlock();
 
       const auxpowHex = AuxPoW.encodeAuxPoW({
-        parentBlock: parentBlockHeader,
+        parentBlock:    parentBlockHeader,
         coinbaseTx,
         coinbaseBranch,
-        auxBranch: [],   // single chain: empty branch
-        auxIndex: 0,
-        parentIndex: 0,
+        auxBranch:      [],  // single chain: empty branch
+        auxIndex:       0,
+        parentIndex:    0,
       });
 
-      const result = await wattxRPC.submitAuxBlock(auxBlock.hash, auxpowHex);
-      if (result) logger && logger.info(`WATTx AuxPoW block accepted: ${auxBlock.hash}`, { coin: 'WTX' });
+      const result = await wattxRPC.submitAuxBlock(ab.hash, auxpowHex);
+      if (result) logger?.info(`WATTx AuxPoW block accepted: ${ab.hash}`, { coin: 'WTX' });
       return result;
     } catch (e) {
-      logger && logger.error(`WATTx AuxPoW submit failed: ${e.message}`, { coin: 'WTX' });
+      logger?.error(`WATTx AuxPoW submit failed: ${e.message}`, { coin: 'WTX' });
       return false;
     }
   }

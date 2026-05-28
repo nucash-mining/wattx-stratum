@@ -15,7 +15,7 @@ class WattxRPC extends DaemonRPC {
   // blockhash: hex string of the parent block hash
   // auxpow: hex-encoded AuxPoW structure
   async submitAuxBlock(blockhash, auxpow) {
-    return this.call('getauxblock', [blockhash, auxpow]);
+    return this.call('submitauxblock', [blockhash, auxpow]);
   }
 
   async getMiningInfo() {

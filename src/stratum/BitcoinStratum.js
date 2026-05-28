@@ -1,9 +1,9 @@
 const net = require('net');
 const crypto = require('crypto');
 const EventEmitter = require('events');
-const BN = require('bn.js');
 const DaemonRPC = require('../rpc/DaemonRPC');
 const AuxPoW = require('../auxpow/AuxPoW');
+const CoinbaseBuilder = require('../coinbase/CoinbaseBuilder');
 const logger = require('../logger');
 
 const EXTRANONCE2_SIZE = 4;
@@ -13,13 +13,13 @@ class BitcoinStratumServer extends EventEmitter {
   constructor(coins, wattxRPC) {
     super();
     this.coins = Array.isArray(coins) ? coins : [coins];
-    this.coin = this.coins[0]; // primary coin drives job/difficulty
-    this.wattxRPC = wattxRPC;
+    this.coin  = this.coins[0]; // primary coin drives job/difficulty
+    this.wattxRPC  = wattxRPC;
     this.algorithm = this.coin.algorithm;
-    this.port = this.coin.stratumPort;
+    this.port      = this.coin.stratumPort;
 
-    this.clients = new Map();
-    this.jobs = new Map();
+    this.clients  = new Map();
+    this.jobs     = new Map();
     this.extranonce1Counter = 0;
 
     this.rpcs = {};
@@ -45,50 +45,62 @@ class BitcoinStratumServer extends EventEmitter {
   }
 
   async _refreshJob() {
-    // Use primary coin for the job template; all coins on this port share the same PoW
     try {
       const template = await this.rpcs[this.coin.ticker].getBlockTemplate(this.coin.address);
-      const job = this._buildJob(this.coin, template);
+      const job      = await this._buildJob(this.coin, template);
       this.jobs.set(job.id, job);
-      this._broadcastJob(job, false);
+      // Trim job history — keep last 8 so stale shares still resolve
+      if (this.jobs.size > 8) {
+        const oldest = [...this.jobs.keys()][0];
+        this.jobs.delete(oldest);
+      }
+      this._broadcastJob(job, true);
     } catch (e) {
       logger.error(`Failed to refresh job for ${this.coin.ticker}: ${e.message}`, { coin: this.coin.ticker });
     }
   }
 
-  _buildJob(coin, template) {
+  async _buildJob(coin, template) {
     const jobId = crypto.randomBytes(4).toString('hex');
-    const auxScript = AuxPoW.buildCoinbaseScript(Buffer.from(template.auxpow_hash || crypto.randomBytes(32)));
+
+    // Fetch the current WATTx aux block so we can embed its hash in the coinbase
+    let auxBlock = null;
+    try {
+      auxBlock = await this.wattxRPC.getAuxBlock();
+    } catch (e) {
+      logger.warn(`WATTx getAuxBlock failed — mining without aux commitment: ${e.message}`, { coin: 'WTX' });
+    }
+
+    const auxHash = auxBlock ? Buffer.from(auxBlock.hash, 'hex') : null;
+
+    const { coinb1, coinb2, merkleBranch } = CoinbaseBuilder.build({
+      template,
+      address: coin.address,
+      auxHash,
+    });
 
     return {
       id: jobId,
       coin: coin.ticker,
       algorithm: coin.algorithm,
       template,
-      auxScript,
-      prevhash: template.previousblockhash,
+      auxBlock,    // saved so _onSubmit uses the exact block we committed to in the coinbase
+      coinb1,
+      coinb2,
+      merkleBranch,
+      prevhash: Buffer.from(template.previousblockhash, 'hex').reverse().toString('hex'),
       bits: template.bits,
       height: template.height,
-      target: this._bitsToTarget(template.bits),
+      version: template.version || 1,
+      curtime: template.curtime,
       cleanJobs: true,
-      timestamp: Math.floor(Date.now() / 1000),
     };
-  }
-
-  _bitsToTarget(bits) {
-    const bitsNum = parseInt(bits, 16);
-    const exp = bitsNum >> 24;
-    const mant = bitsNum & 0xffffff;
-    const target = new BN(mant).shln(8 * (exp - 3));
-    return target.toBuffer('be', 32);
   }
 
   _broadcastJob(job, cleanJobs) {
     const notify = this._buildNotify(job, cleanJobs);
     for (const client of this.clients.values()) {
-      if (client.authorized) {
-        client.socket.write(JSON.stringify(notify) + '\n');
-      }
+      if (client.authorized) client.socket.write(JSON.stringify(notify) + '\n');
     }
   }
 
@@ -98,20 +110,20 @@ class BitcoinStratumServer extends EventEmitter {
       method: 'mining.notify',
       params: [
         job.id,
-        job.prevhash,
-        '', // coinb1 — TODO: build actual coinbase transaction parts
-        '', // coinb2
-        [],  // merkle_branch
-        '20000000',
+        job.prevhash,                                           // LE (already reversed from display)
+        job.coinb1,
+        job.coinb2,
+        job.merkleBranch,
+        job.version.toString(16).padStart(8, '0'),
         job.bits,
-        job.timestamp.toString(16),
+        job.curtime.toString(16).padStart(8, '0'),
         cleanJobs,
       ],
     };
   }
 
   _handleConnection(socket) {
-    const clientId = crypto.randomBytes(4).toString('hex');
+    const clientId    = crypto.randomBytes(4).toString('hex');
     const extranonce1 = (this.extranonce1Counter++).toString(16).padStart(8, '0');
 
     const client = {
@@ -119,7 +131,6 @@ class BitcoinStratumServer extends EventEmitter {
       socket,
       extranonce1,
       authorized: false,
-      coin: null,
       worker: null,
       difficulty: 1,
       shares: 0,
@@ -139,7 +150,7 @@ class BitcoinStratumServer extends EventEmitter {
       }
     });
 
-    socket.on('end', () => this._removeClient(clientId));
+    socket.on('end',   () => this._removeClient(clientId));
     socket.on('error', (e) => {
       logger.error(`Client ${clientId} error: ${e.message}`, { coin: this.algorithm });
       this._removeClient(clientId);
@@ -155,8 +166,7 @@ class BitcoinStratumServer extends EventEmitter {
   }
 
   _send(client, id, result, error = null) {
-    const msg = JSON.stringify({ id, result, error }) + '\n';
-    client.socket.write(msg);
+    client.socket.write(JSON.stringify({ id, result, error }) + '\n');
   }
 
   _handleMessage(client, line) {
@@ -164,9 +174,9 @@ class BitcoinStratumServer extends EventEmitter {
     try { msg = JSON.parse(line); } catch (_) { return; }
 
     switch (msg.method) {
-      case 'mining.subscribe':  return this._onSubscribe(client, msg.id, msg.params);
-      case 'mining.authorize':  return this._onAuthorize(client, msg.id, msg.params);
-      case 'mining.submit':     return this._onSubmit(client, msg.id, msg.params);
+      case 'mining.subscribe':           return this._onSubscribe(client, msg.id, msg.params);
+      case 'mining.authorize':           return this._onAuthorize(client, msg.id, msg.params);
+      case 'mining.submit':              return this._onSubmit(client, msg.id, msg.params);
       case 'mining.extranonce.subscribe': return this._send(client, msg.id, true);
       default:
         logger.info(`Unknown method from ${client.id}: ${msg.method}`, { coin: this.algorithm });
@@ -179,8 +189,6 @@ class BitcoinStratumServer extends EventEmitter {
       client.extranonce1,
       EXTRANONCE2_SIZE,
     ]);
-
-    // Send current difficulty
     client.socket.write(JSON.stringify({
       id: null, method: 'mining.set_difficulty', params: [client.difficulty],
     }) + '\n');
@@ -189,11 +197,10 @@ class BitcoinStratumServer extends EventEmitter {
   _onAuthorize(client, id, params) {
     const [workerName] = params;
     client.authorized = true;
-    client.worker = workerName;
+    client.worker     = workerName;
     this._send(client, id, true);
     logger.info(`Authorized: ${workerName}`, { coin: this.coin.ticker });
 
-    // Send the latest job immediately
     const job = [...this.jobs.values()].pop();
     if (job) client.socket.write(JSON.stringify(this._buildNotify(job, true)) + '\n');
   }
@@ -201,31 +208,50 @@ class BitcoinStratumServer extends EventEmitter {
   async _onSubmit(client, id, params) {
     const [_worker, jobId, extranonce2, ntime, nonce] = params;
     const job = this.jobs.get(jobId);
-
     if (!job) return this._send(client, id, false, [21, 'Job not found']);
 
-    const tickers = this.coins.map((c) => c.ticker).join('+');
     client.shares++;
+
+    // ---- Reconstruct the full coinbase tx ----
+    const coinbaseTx   = CoinbaseBuilder.assembleCoinbase(job.coinb1, client.extranonce1, extranonce2, job.coinb2);
+    const coinbaseTxId = CoinbaseBuilder.txId(coinbaseTx);
+    const merkleRoot   = CoinbaseBuilder.merkleRoot(coinbaseTxId, job.merkleBranch);
+
+    // ---- Build 80-byte block header ----
+    const header = CoinbaseBuilder.buildHeader({
+      version:    job.version,
+      prevHashHex: job.template.previousblockhash,  // display order — reversed inside buildHeader
+      merkleRoot,
+      ntimeHex:   ntime,
+      bitsHex:    job.bits,
+      nonceHex:   nonce,
+    });
+
+    // ---- Build full serialised block ----
+    const blockHex = CoinbaseBuilder.buildBlock({ header, coinbaseTx, template: job.template });
+
+    const tickers = this.coins.map((c) => c.ticker).join('+');
     this._send(client, id, true);
-    logger.info(`Share from ${client.worker} job=${jobId}`, { coin: tickers });
-    this.emit('share', { client, job, extranonce2, ntime, nonce });
+    logger.info(`Share from ${client.worker} job=${jobId} height=${job.height}`, { coin: tickers });
+    this.emit('share', { client, job, extranonce2, ntime, nonce, header, coinbaseTx });
 
-    // Submit block to every coin on this port simultaneously
-    // TODO: build per-coin coinbase tx with coin-specific reward address once coinbase builder is complete
-    for (const c of this.coins) {
-      this.rpcs[c.ticker].submitBlock('').catch((e) => {
-        logger.error(`submitBlock failed for ${c.ticker}: ${e.message}`, { coin: c.ticker });
-      });
+    // ---- Submit block to the primary coin daemon ----
+    this.rpcs[this.coin.ticker].submitBlock(blockHex).catch((e) => {
+      logger.error(`submitBlock failed for ${this.coin.ticker}: ${e.message}`, { coin: this.coin.ticker });
+    });
+
+    // ---- Submit AuxPoW to WATTx using the aux block committed in this job's coinbase ----
+    if (job.auxBlock) {
+      const coinbaseBranch = job.merkleBranch.map((h) => Buffer.from(h, 'hex'));
+      AuxPoW.trySubmit({
+        wattxRPC:          this.wattxRPC,
+        parentBlockHeader: header,
+        coinbaseTx,
+        coinbaseBranch,
+        auxBlock:          job.auxBlock,
+        logger,
+      }).catch(() => {});
     }
-
-    // AuxPoW for WATTx
-    AuxPoW.trySubmit({
-      wattxRPC: this.wattxRPC,
-      parentBlockHeader: Buffer.alloc(80), // placeholder — replace with real header
-      coinbaseTx: Buffer.alloc(0),
-      coinbaseBranch: [],
-      logger,
-    }).catch(() => {});
   }
 }
 
