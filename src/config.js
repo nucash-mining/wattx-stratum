@@ -2,7 +2,7 @@ module.exports = {
   // WATTx daemon — the aux chain that receives AuxPoW proofs
   wattx: {
     host: '127.0.0.1',
-    port: 3889,
+    port: 2337,          // RPC port — matches WATTx chain ID (UTXO + EVM)
     user: 'wattxrpc',
     password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV',
     address: 'WATTX_REWARD_ADDRESS',
@@ -108,12 +108,11 @@ module.exports = {
       enabled: false,
     },
     // Bitnet — SHA-256d hybrid PoW/PoS (QTUM fork).  https://github.com/bitnet-io/bitnet-core
-    // Default bitnetd RPC port is 3889, same as WATTx; run bitnetd with -rpcport=13889 or adjust below.
     BIT: {
       name: 'Bitnet',
       algorithm: 'sha256d',
       stratumPort: 3343,
-      daemon: { host: '127.0.0.1', port: 13889, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 3889, user: 'rpcuser', password: 'rpcpassword' },
       address: 'BIT_REWARD_ADDRESS',
       enabled: false,
     },
