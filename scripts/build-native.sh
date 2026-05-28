@@ -13,11 +13,11 @@ mkdir -p native
 echo "=== Installing system dependencies ==="
 if command -v dnf &>/dev/null; then
   # Enable EPEL if not already enabled (provides libsodium on RHEL/OL9)
-  if ! dnf repolist enabled | grep -q epel; then
-    sudo dnf install -y oracle-epel-release-el9 2>/dev/null || \
-    sudo dnf install -y epel-release 2>/dev/null || true
-  fi
-  sudo dnf install -y libsodium-devel
+  # Enable EPEL and install libsodium (Oracle Linux 9: repo is ol9_developer_EPEL)
+  sudo dnf install -y oracle-epel-release-el9 2>/dev/null || \
+  sudo dnf install -y epel-release 2>/dev/null || true
+  EPEL_REPO=$(dnf repolist all 2>/dev/null | grep -i epel | awk '{print $1}' | head -1)
+  sudo dnf ${EPEL_REPO:+--enablerepo="$EPEL_REPO"} install -y libsodium-devel boost-devel
 elif command -v apt-get &>/dev/null; then
   sudo apt-get install -y libsodium-dev
 fi
