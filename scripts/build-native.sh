@@ -12,6 +12,11 @@ mkdir -p native
 
 echo "=== Installing system dependencies ==="
 if command -v dnf &>/dev/null; then
+  # Enable EPEL if not already enabled (provides libsodium on RHEL/OL9)
+  if ! dnf repolist enabled | grep -q epel; then
+    sudo dnf install -y oracle-epel-release-el9 2>/dev/null || \
+    sudo dnf install -y epel-release 2>/dev/null || true
+  fi
   sudo dnf install -y libsodium-devel
 elif command -v apt-get &>/dev/null; then
   sudo apt-get install -y libsodium-dev
