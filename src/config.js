@@ -23,6 +23,7 @@ module.exports = {
   //   3340  DASH        (X11)
   //   3341  ZEN + ZEC + BTCZ  (Equihash 200,9 — one miner earns all three)
   //   3342  KAS         (kHeavyHash)
+  //   3343  BIT         (SHA-256d, Bitnet — PoW/PoS hybrid, PoW blocks mined normally)
   coins: {
     XMR: {
       name: 'Monero',
@@ -104,6 +105,16 @@ module.exports = {
       stratumPort: 3342,
       daemon: { host: '127.0.0.1', port: 16110, user: '', password: '' },
       address: 'KAS_REWARD_ADDRESS',
+      enabled: false,
+    },
+    // Bitnet — SHA-256d hybrid PoW/PoS (QTUM fork).  https://github.com/bitnet-io/bitnet-core
+    // Default bitnetd RPC port is 3889, same as WATTx; run bitnetd with -rpcport=13889 or adjust below.
+    BIT: {
+      name: 'Bitnet',
+      algorithm: 'sha256d',
+      stratumPort: 3343,
+      daemon: { host: '127.0.0.1', port: 13889, user: 'rpcuser', password: 'rpcpassword' },
+      address: 'BIT_REWARD_ADDRESS',
       enabled: false,
     },
   },
