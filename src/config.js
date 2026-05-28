@@ -2,7 +2,7 @@ module.exports = {
   // WATTx daemon — the aux chain that receives AuxPoW proofs
   wattx: {
     host: '127.0.0.1',
-    port: 2337,          // RPC port — matches WATTx chain ID (UTXO + EVM)
+    port: 3889,          // RPC port (wattxd default; chain ID is 2337 but that's separate)
     user: 'wattxrpc',
     password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV',
     address: 'WPTAXDteyU2U1u1LRLXzXiVUjxryeZkAEP',
@@ -58,7 +58,7 @@ module.exports = {
       name: 'Litecoin',
       algorithm: 'scrypt',
       stratumPort: 3337,
-      daemon: { host: '127.0.0.1', port: 9332, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 9332, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'LTC_REWARD_ADDRESS',
       enabled: false,
     },
@@ -66,7 +66,8 @@ module.exports = {
       name: 'Bitcoin',
       algorithm: 'sha256d',
       stratumPort: 3336,
-      daemon: { host: '127.0.0.1', port: 8332, user: 'rpcuser', password: 'rpcpassword' },
+      // Port 8334: standard 8332 conflicts with ALT (geth-alt uses 8332)
+      daemon: { host: '127.0.0.1', port: 8334, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'BTC_REWARD_ADDRESS',
       enabled: false,
     },
@@ -74,7 +75,7 @@ module.exports = {
       name: 'Dash',
       algorithm: 'x11',
       stratumPort: 3340,
-      daemon: { host: '127.0.0.1', port: 9998, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 9998, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'DASH_REWARD_ADDRESS',
       enabled: false,
     },
@@ -82,7 +83,7 @@ module.exports = {
       name: 'Horizen',
       algorithm: 'equihash_200_9',
       stratumPort: 3341,
-      daemon: { host: '127.0.0.1', port: 8231, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 8231, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'ZEN_REWARD_ADDRESS',
       enabled: false,
     },
@@ -90,7 +91,7 @@ module.exports = {
       name: 'Zcash',
       algorithm: 'equihash_200_9',
       stratumPort: 3341,
-      daemon: { host: '127.0.0.1', port: 8232, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 8232, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'ZEC_REWARD_ADDRESS',
       enabled: false,
     },
@@ -98,7 +99,7 @@ module.exports = {
       name: 'BitcoinZ',
       algorithm: 'equihash_200_9',
       stratumPort: 3341,
-      daemon: { host: '127.0.0.1', port: 1979, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 1979, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'BTCZ_REWARD_ADDRESS',
       enabled: false,
     },
@@ -111,11 +112,12 @@ module.exports = {
       enabled: false,
     },
     // Bitnet — SHA-256d hybrid PoW/PoS (QTUM fork).  https://github.com/bitnet-io/bitnet-core
+    // Port 3890: default 3889 conflicts with wattxd
     BIT: {
       name: 'Bitnet',
       algorithm: 'sha256d',
       stratumPort: 3343,
-      daemon: { host: '127.0.0.1', port: 3889, user: 'rpcuser', password: 'rpcpassword' },
+      daemon: { host: '127.0.0.1', port: 3890, user: 'wattxrpc', password: 'v4AZR3AmHHbrMkRfhXlkWH6MI1bFeHwV' },
       address: 'BIT_REWARD_ADDRESS',
       enabled: false,
     },
