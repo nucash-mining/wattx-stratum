@@ -4,6 +4,7 @@ const EventEmitter = require('events');
 const DaemonRPC = require('../rpc/DaemonRPC');
 const AuxPoW = require('../auxpow/AuxPoW');
 const CoinbaseBuilder = require('../coinbase/CoinbaseBuilder');
+const VarDiff = require('./VarDiff');
 const logger = require('../logger');
 
 const EXTRANONCE2_SIZE = 4;
@@ -27,6 +28,10 @@ class BitcoinStratumServer extends EventEmitter {
       this.rpcs[c.ticker] = new DaemonRPC(c.daemon);
     }
     this._jobRefreshInterval = null;
+
+    const algoDefs = VarDiff.defaultsFor(this.algorithm);
+    this.initialDifficulty = algoDefs.initial;
+    this.varDiff = new VarDiff({ minDiff: algoDefs.min, maxDiff: algoDefs.max });
   }
 
   start() {
@@ -132,7 +137,7 @@ class BitcoinStratumServer extends EventEmitter {
       extranonce1,
       authorized: false,
       worker: null,
-      difficulty: 1,
+      difficulty: this.initialDifficulty,
       shares: 0,
       buffer: '',
     };
@@ -210,8 +215,6 @@ class BitcoinStratumServer extends EventEmitter {
     const job = this.jobs.get(jobId);
     if (!job) return this._send(client, id, false, [21, 'Job not found']);
 
-    client.shares++;
-
     // ---- Reconstruct the full coinbase tx ----
     const coinbaseTx   = CoinbaseBuilder.assembleCoinbase(job.coinb1, client.extranonce1, extranonce2, job.coinb2);
     const coinbaseTxId = CoinbaseBuilder.txId(coinbaseTx);
@@ -232,8 +235,19 @@ class BitcoinStratumServer extends EventEmitter {
 
     const tickers = this.coins.map((c) => c.ticker).join('+');
     this._send(client, id, true);
+    client.shares++;
     logger.info(`Share from ${client.worker} job=${jobId} height=${job.height}`, { coin: tickers });
     this.emit('share', { client, job, extranonce2, ntime, nonce, header, coinbaseTx });
+
+    // VarDiff retarget
+    const newDiff = this.varDiff.onShare(client);
+    if (newDiff !== null) {
+      client.difficulty = newDiff;
+      client.socket.write(JSON.stringify({
+        id: null, method: 'mining.set_difficulty', params: [newDiff],
+      }) + '\n');
+      logger.debug(`VarDiff ${client.worker}: diff → ${newDiff}`, { coin: tickers });
+    }
 
     // ---- Submit block to the primary coin daemon ----
     this.rpcs[this.coin.ticker].submitBlock(blockHex).catch((e) => {
